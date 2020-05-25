@@ -73,12 +73,16 @@ forAll(R,i)
 
 // Limit normal Reynolds stresses according to the the realizibility constraints
 // -----------------------------------------------------------------------------
-forAll(R_diag,i)
-{
-    R_diag[i].xx() = max(R[i].xx(),1e-10);
-    R_diag[i].yy() = max(R[i].yy(),1e-10);
-    R_diag[i].zz() = max(R[i].zz(),1e-10);
-}
+R_diag.max
+	(
+		dimensionedSymmTensor
+		(
+			"zero",
+			ReynoldsStress.dimensions(),
+			symmTensor
+			( 1e-10, -GREAT, -GREAT, 1e-10, -GREAT, 1e-10)
+		)
+	);
 
 // Optionally Limit off-diagonal Reynolds stresses according to the the realizibility constraints
 // ----------------------------------------------------------------------------------------------
