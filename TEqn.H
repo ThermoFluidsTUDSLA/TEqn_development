@@ -80,7 +80,7 @@ R_diag.max
 			"zero",
 			ReynoldsStress.dimensions(),
 			symmTensor
-			( 1e-10, -GREAT, -GREAT, 1e-10, -GREAT, 1e-10)
+			( 1e-10, 0, 0, 1e-10, 0, 1e-10)
 		)
 	);
 
