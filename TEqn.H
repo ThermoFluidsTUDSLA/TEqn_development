@@ -83,41 +83,6 @@ R_diag.max
 			( 1e-10, 0, 0, 1e-10, 0, 1e-10)
 		)
 	);
-
-// Optionally Limit off-diagonal Reynolds stresses according to the the realizibility constraints
-// ----------------------------------------------------------------------------------------------
-volScalarField maxMag_R_xy("maxMag_R_xy",Foam::sqrt(mag(R_diag.component(symmTensor::XX)*R_diag.component(symmTensor::YY))));
-volScalarField maxMag_R_xz("maxMag_R_xz",Foam::sqrt(mag(R_diag.component(symmTensor::XX)*R_diag.component(symmTensor::ZZ))));
-volScalarField maxMag_R_yz("maxMag_R_yz",Foam::sqrt(mag(R_diag.component(symmTensor::YY)*R_diag.component(symmTensor::ZZ))));
-
-forAll(R_dev,i)
-{
-        if(std::signbit(R_dev[i].xy())) // Negative value
-        {
-            R_dev[i].xy() = max(R_dev[i].xy(),-1*maxMag_R_xy[i]);
-        }
-        else
-        {
-            R_dev[i].xy() = min(R_dev[i].xy(),+1*maxMag_R_xy[i]);
-        }
-        if(std::signbit(R[i].xz())) // Negative value
-        {
-            R_dev[i].xz() = max(R_dev[i].xz(),-1*maxMag_R_xz[i]);
-        }
-        else
-        {
-            R_dev[i].xz() = min(R_dev[i].xz(),+1*maxMag_R_xz[i]);
-        }
-        if(std::signbit(R[i].xz())) // Negative value
-        {
-            R_dev[i].yz() = max(R_dev[i].yz(),-1*maxMag_R_yz[i]);
-        }
-        else
-        {
-            R_dev[i].yz() = min(R_dev[i].yz(),+1*maxMag_R_yz[i]);
-        }
-}
-
 volSymmTensorField ReynoldsStresses = R_diag + R_dev;
 
 // Turbulent (subgrid) production 
