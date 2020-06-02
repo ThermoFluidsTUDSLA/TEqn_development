@@ -146,8 +146,8 @@ Info << "Maximum ::" << gMax(T) << endl;
 Info << "Minimum ::" << gMin(T) << endl;
 Info << "***********************************************" << endl;
 
-
-
+// Calculation of heat transfer related Entropy production "Sigma_alpha" (initialized in creatFields.H)
+Sigma_alpha = (cp*alpha)/sqr(T)*(fvc::grad(T) & fvc::grad(T)) + (((alphat & fvc::grad(T)) & fvc::grad(T))*cp)/sqr(T);  // Sigma_alpha der Entropiegleichung
 
 
 
