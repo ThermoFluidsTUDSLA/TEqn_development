@@ -1,3 +1,95 @@
+// Additionally add following lines to createFields.H
+/* 
+
+// Addition for the temperature equation
+// *************************************************************************
+
+Info<< "Reading field T\n" << endl;
+volScalarField T
+(
+    IOobject
+    (
+        "T",
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::AUTO_WRITE
+    ),
+    mesh
+);
+
+Info<< "Creating field for the entropy production\n" << endl;
+volScalarField Sigma_alpha
+(
+    IOobject
+    (
+        "Sigma_alpha",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionSet(0,2,-3,-1,0,0,0)
+);
+
+
+Info<< "Reading the model for subGridFluxes\n" << endl;
+
+IOdictionary turbulencePropertiesDict
+(
+    IOobject
+    (
+        "turbulenceProperties",
+        runTime.constant(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE
+    )
+);
+
+dimensioned<scalar> alpha_t_Coeff
+(
+	dimensioned<scalar>::lookupOrAddToDict
+	(
+	   "alpha_t_Coeff",
+	   turbulencePropertiesDict.subDict("subGridFluxes"),
+	   1
+	)
+);
+
+dimensioned<scalar> Prt
+(
+	dimensioned<scalar>::lookupOrAddToDict
+	(
+	   "Prt",
+	   turbulencePropertiesDict.subDict("subGridFluxes"),
+	   0.9
+	)
+);
+
+Info<< "Reading transportProperties\n" << endl;
+IOdictionary transportPropertiesDict
+(
+    IOobject
+    (
+        "transportProperties",
+        runTime.constant(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE
+    )
+);
+
+dimensionedScalar Pr("Pr",dimensionSet(0,0,0,0,0,0,0),transportPropertiesDict); // Molecular Prandtl number
+
+dimensionedScalar cp("cp",dimensionSet(0,2,-2,-1,0,0),transportPropertiesDict); // Specific isobaric heat capacity
+
+// *************************************************************************
+
+*/
+
+
 // Solve Temperature equation
 
 // ******************************************************************************************************************************
@@ -68,21 +160,25 @@ forAll(R,i)
     R_dev[i].xy() = R[i].xy();
     R_dev[i].xz() = R[i].xz();
     R_dev[i].yz() = R[i].yz();
-
 }
 
 // Limit normal Reynolds stresses according to the the realizibility constraints
 // -----------------------------------------------------------------------------
 R_diag.max
-	(
-		dimensionedSymmTensor
-		(
-			"zero",
-			ReynoldsStress.dimensions(),
-			symmTensor
-			( 1e-10, 0, 0, 1e-10, 0, 1e-10)
-		)
-	);
+(
+    dimensionedSymmTensor
+    (
+        "zero",
+        R.dimensions(),
+        symmTensor
+        (
+            1e-10, 0.0, 0.0,
+            1e-10, 0.0,
+            1e-10
+        )
+    )
+);
+
 volSymmTensorField ReynoldsStresses = R_diag + R_dev;
 
 // Turbulent (subgrid) production 
@@ -94,47 +190,44 @@ volSymmTensorField ReynoldsStresses = R_diag + R_dev;
 
 dimensionedSymmTensor I("I",dimensionSet(0,0,0,0,0,0,0),symmTensor(1,0,0,1,0,1));
 
-volSymmTensorField alphaTurb1(
+volSymmTensorField alphaTurbSGH(
                               "alphaTurb1",
-                              turbulence->nut()*I/0.9
+                              turbulence->nut()*I/Prt.value()
                              );
 
-volSymmTensorField alphaTurb2(
+volSymmTensorField alphaTurbGGH(
                               "alphaTurb2",
-                              timeScale*(
-                                          C2*ReynoldsStresses//+
-                                        )
+                              C2*timeScale*ReynoldsStresses          
                               );
-/*
-volTensorField  alphaTurb3(
-                              "alphaTurb3",
-                              timeScale*(
-                                          C3*timeScale*boundedK*fvc::grad(U)
-                                        )
-                          );
 
-volSymmTensorField  alphaTurb4(
-                              "alphaTurb4",
-                              timeScale*(
-                                          C4*timeScale*P
-                                        )
-                          );
+volSymmTensorField alphaTurb("alphaTurb",alphaTurbSGH);
 
-*/
+if(alpha_t_Coeff.value() == 1.0)
+{
+  Info << "------------------------------------------" << endl;
+  Info << "Using SGH hypotesys for the subGrid fluxes" << endl;
+  Info << "------------------------------------------" << endl;
+}
+else
+{
+  Info << "------------------------------------------" << endl;
+  Info << "Using GGH hypotesys for the subGrid fluxes" << endl;
+  Info << "------------------------------------------" << endl; 
+
+  alphaTurb = alphaTurbGGH;
+}
 
 // Solving the temperature equation ::
 // ***********************************
 
+
 fvScalarMatrix TEqn
 (
-	fvm::ddt(T)
-	+fvm::div(phi,T) 
-	-fvm::laplacian(alphaVisc,T)
-	//-fvm::laplacian(alphaTurb1,T)	
-    -fvm::laplacian(alphaTurb2,T)
-    //-fvm::laplacian(alphaTurb3,T)
-    //-fvm::laplacian(alphaTurb4,T)	
-	== fvOptions(T)
+  fvm::ddt(T)
+  +fvm::div(phi,T) 
+  -fvm::laplacian(alphaVisc,T)
+  -fvm::laplacian(alphaTurb,T) 
+  == fvOptions(T)
 
 );
 
@@ -142,12 +235,25 @@ TEqn.relax();
 TEqn.solve();
 
 Info << "***********************************************" << endl;
-Info << "Maximum ::" << gMax(T) << endl;
-Info << "Minimum ::" << gMin(T) << endl;
+Info << "Maximum T::" << gMax(T) << endl;
+Info << "Minimum T::" << gMin(T) << endl;
 Info << "***********************************************" << endl;
 
-// Calculation of heat transfer related Entropy production "Sigma_alpha" (initialized in creatFields.H)
-Sigma_alpha = (cp*alpha)/sqr(T)*(fvc::grad(T) & fvc::grad(T)) + (((alphat & fvc::grad(T)) & fvc::grad(T))*cp)/sqr(T);  // Sigma_alpha der Entropiegleichung
+// Additional check for the entropy production due to the temperature diffusion (laminar + turbulent)
+
+Sigma_alpha = ( alphaVisc*cp/sqr(T) )*( (fvc::grad(T) &fvc::grad(T)) + ( (alphaTurb & fvc::grad(T)) & fvc::grad(T) )/alphaVisc);
+
+scalar min_Sigma_alpha = gMin(Sigma_alpha);
+
+Info << "------------------------------------------" << endl;
+Info << "Minimal production of entropy :: " << min_Sigma_alpha << endl;
+Info << "------------------------------------------" << endl;
+
+if(std::signbit(min_Sigma_alpha))
+{
+  Info << "Negative production of entropy, writing the field!!" << endl;
+  Sigma_alpha.write();
+}
 
 
 
